@@ -173,7 +173,7 @@ class StateGraph(Graph):
             for name, branch in branches.items():
                 compiled.attach_branch(start, name, branch)
 
-        return compiled.validate()
+        return compiled.validate_self()
 
 
 class CompiledStateGraph(CompiledGraph):

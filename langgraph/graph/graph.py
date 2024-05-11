@@ -340,7 +340,7 @@ class Graph:
                 compiled.attach_branch(start, name, branch)
 
         # validate the compiled graph
-        return compiled.validate()
+        return compiled.validate_self()
 
 
 class CompiledGraph(Pregel):

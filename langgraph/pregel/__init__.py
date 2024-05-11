@@ -244,7 +244,7 @@ class Pregel(
                 raise ValueError("Interrupts require a checkpointer")
         return values
 
-    def validate(self) -> Self:
+    def validate_self(self) -> Self:
         validate_graph(
             self.nodes,
             self.channels,
