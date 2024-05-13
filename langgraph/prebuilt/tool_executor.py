@@ -1,10 +1,8 @@
 from typing import Any, Sequence, Union
 
 from langchain_core.load.serializable import Serializable
-from langchain_core.runnables import RunnableConfig
+from langchain_core.runnables import RunnableBinding, RunnableConfig, RunnableLambda
 from langchain_core.tools import BaseTool
-
-from langgraph.utils import RunnableCallable
 
 INVALID_TOOL_MSG_TEMPLATE = (
     "{requested_tool_name} is not a valid tool, "
@@ -13,84 +11,44 @@ INVALID_TOOL_MSG_TEMPLATE = (
 
 
 class ToolInvocationInterface:
-    """Interface for invoking a tool.
-
-    Attributes:
-        tool (str): The name of the tool to invoke.
-        tool_input (Union[str, dict]): The input to pass to the tool.
-
-    """
+    """Interface for invoking a tool"""
 
     tool: str
     tool_input: Union[str, dict]
 
 
 class ToolInvocation(Serializable):
-    """Information about how to invoke a tool.
-
-    Attributes:
-        tool (str): The name of the Tool to execute.
-        tool_input (Union[str, dict]): The input to pass in to the Tool.
-
-    Examples:
-
-            invocation = ToolInvocation(
-                tool="search",
-                tool_input="What is the capital of France?"
-            )
-    """
+    """Information about how to invoke a tool."""
 
     tool: str
+    """The name of the Tool to execute."""
     tool_input: Union[str, dict]
+    """The input to pass in to the Tool."""
 
 
-class ToolExecutor(RunnableCallable):
-    """Executes a tool invocation.
-
-    Args:
-        tools (Sequence[BaseTool]): A sequence of tools that can be invoked.
-        invalid_tool_msg_template (str, optional): The template for the error message
-            when an invalid tool is requested. Defaults to INVALID_TOOL_MSG_TEMPLATE.
-
-    Examples:
-
-            from langchain_core.tools import tool
-            from langgraph.prebuilt.tool_executor import ToolExecutor, ToolInvocation
-
-
-            @tool
-            def search(query: str) -> str:
-                \"\"\"Search engine.\"\"\"
-                return f"Searching for: {query}"
-
-
-            tools = [search]
-            executor = ToolExecutor(tools)
-
-            invocation = ToolInvocation(tool="search", tool_input="What is the capital of France?")
-            result = executor.invoke(invocation)
-            print(result)  # Output: "Searching for: What is the capital of France?"
-
-            invocation = ToolInvocation(
-                tool="nonexistent", tool_input="What is the capital of France?"
-            )
-            result = executor.invoke(invocation)
-            print(result)  # Output: "nonexistent is not a valid tool, try one of [search]."
-    """
+class ToolExecutor(RunnableBinding):
+    tools: Sequence[BaseTool]
+    tool_map: dict
+    invalid_tool_msg_template: str
 
     def __init__(
         self,
         tools: Sequence[BaseTool],
         *,
         invalid_tool_msg_template: str = INVALID_TOOL_MSG_TEMPLATE,
+        **kwargs: Any,
     ) -> None:
-        super().__init__(self._execute, afunc=self._aexecute, trace=False)
-        self.tools = tools
-        self.tool_map = {t.name: t for t in tools}
-        self.invalid_tool_msg_template = invalid_tool_msg_template
+        bound = RunnableLambda(self._execute, afunc=self._aexecute)
+        super().__init__(
+            bound=bound,
+            tools=tools,
+            tool_map={t.name: t for t in tools},
+            invalid_tool_msg_template=invalid_tool_msg_template,
+            **kwargs,
+        )
 
     def _execute(
-        self, tool_invocation: ToolInvocationInterface, config: RunnableConfig
+        self, tool_invocation: ToolInvocationInterface, *, config: RunnableConfig
     ) -> Any:
         if tool_invocation.tool not in self.tool_map:
             return self.invalid_tool_msg_template.format(
@@ -99,11 +57,11 @@ class ToolExecutor(RunnableCallable):
             )
         else:
             tool = self.tool_map[tool_invocation.tool]
-            output = tool.invoke(tool_invocation.tool_input, config)
+            output = tool.invoke(tool_invocation.tool_input, config=config)
             return output
 
     async def _aexecute(
-        self, tool_invocation: ToolInvocationInterface, config: RunnableConfig
+        self, tool_invocation: ToolInvocationInterface, *, config: RunnableConfig
     ) -> Any:
         if tool_invocation.tool not in self.tool_map:
             return self.invalid_tool_msg_template.format(
@@ -112,5 +70,5 @@ class ToolExecutor(RunnableCallable):
             )
         else:
             tool = self.tool_map[tool_invocation.tool]
-            output = await tool.ainvoke(tool_invocation.tool_input, config)
+            output = await tool.ainvoke(tool_invocation.tool_input, config=config)
             return output
